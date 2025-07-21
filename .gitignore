@@ -1,0 +1,10 @@
+dist/
+node_modules/
+export/.venv/
+export/*.onnx
+export/__pycache__/
+
+.env
+.DS_Store
+
+notes.txt

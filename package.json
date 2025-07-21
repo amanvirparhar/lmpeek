@@ -1,0 +1,51 @@
+{
+  "name": "lmpeek",
+  "version": "0.0.1",
+  "description": "A library for analyzing LLM internals in web browsers.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.mjs",
+      "require": "./dist/worker.js"
+    }
+  },
+  "homepage": "https://amanvir.com/gpt-2-attention",
+  "repository": {
+    "url": "https://github.com/amanvir/lmpeek"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "keywords": [
+    "llm",
+    "gpt-2",
+    "attention",
+    "onnx",
+    "web-worker",
+    "browser",
+    "machine-learning"
+  ],
+  "author": "amanvir_",
+  "license": "MIT",
+  "dependencies": {
+    "@lenml/tokenizer-gpt2": "^1.1.2",
+    "idb-keyval": "^6.2.2",
+    "onnxruntime-web": "^1.22.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}

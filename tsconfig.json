@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "declaration": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "outDir": "./dist",
+    "lib": ["ES2020", "DOM", "WebWorker"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}
