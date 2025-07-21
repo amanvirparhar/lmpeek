@@ -3,34 +3,45 @@ import * as ort from "onnxruntime-web";
 import { get, set } from "idb-keyval";
 
 export interface GPT2AttentionHead {
-  q: Float32Array;
-  k: Float32Array;
-  v: Float32Array;
-  attn: Float32Array;
-  softmax: Float32Array;
-  dropout: Float32Array;
+  q: ort.Tensor;
+  k: ort.Tensor;
+  v: ort.Tensor;
+  raw: ort.Tensor;
+  scaled: ort.Tensor;
+  masked: ort.Tensor;
+  softmax: ort.Tensor;
 }
 
 export interface GPT2TransformerBlock {
-  ln_1_output: Float32Array;
-  attn_heads: GPT2AttentionHead[];
-  attn_output: Float32Array;
-  res_1: Float32Array;
-  ln_2_output: Float32Array;
-  mlp_linear_1_output: Float32Array;
-  mlp_gelu_output: Float32Array;
-  mlp_linear_2_output: Float32Array;
-  output: Float32Array;
-  res_2: Float32Array;
+  ln_1_output: ort.Tensor;
+  attn_heads: {
+    q: ort.Tensor;
+    k: ort.Tensor;
+    v: ort.Tensor;
+    raw: ort.Tensor;
+    scaled: ort.Tensor;
+    masked: ort.Tensor;
+    softmax: ort.Tensor;
+  }[];
+  attn_output: ort.Tensor;
+  res_1: ort.Tensor;
+  ln_2_output: ort.Tensor;
+  mlp: {
+    linear_1_output: ort.Tensor;
+    gelu_output: ort.Tensor;
+    linear_2_output: ort.Tensor;
+    output: ort.Tensor;
+  };
+  res_2: ort.Tensor;
 }
 
 export interface GPT2Outputs {
-  tok_emb: Float32Array;
-  pos_emb: Float32Array;
-  input_emb: Float32Array;
+  tok_emb: ort.Tensor;
+  pos_emb: ort.Tensor;
+  input_emb: ort.Tensor;
   blocks: GPT2TransformerBlock[];
-  ln_f_output: Float32Array;
-  linear_output: Float32Array;
+  ln_f_output: ort.Tensor;
+  linear_output: ort.Tensor;
 }
 
 const MODEL_CONFIG = {
@@ -152,48 +163,19 @@ async function forward(
     const rawOutputs = await modelSession.run({
         input: new ort.Tensor("int64", tokenIds, [1, tokenIds.length]),
       }),
-      formattedOutputs = {
+      formattedOutputs: GPT2Outputs = {
         tok_emb: rawOutputs["tok_emb"],
         pos_emb: rawOutputs["pos_emb"],
         input_emb: rawOutputs["input_emb"],
-        blocks: [] as {
-          ln_1_output: ort.Tensor;
-          attn_heads: {
-            q: ort.Tensor;
-            k: ort.Tensor;
-            v: ort.Tensor;
-            raw: ort.Tensor;
-            scaled: ort.Tensor;
-            masked: ort.Tensor;
-            softmax: ort.Tensor;
-          }[];
-          attn_output: ort.Tensor;
-          res_1: ort.Tensor;
-          ln_2_output: ort.Tensor;
-          mlp: {
-            linear_1_output: ort.Tensor;
-            gelu_output: ort.Tensor;
-            linear_2_output: ort.Tensor;
-            output: ort.Tensor;
-          };
-          res_2: ort.Tensor;
-        }[],
+        blocks: [] as GPT2TransformerBlock[],
         ln_f_output: rawOutputs["ln_f_output"],
         linear_output: rawOutputs["linear_output"],
       };
 
     for (let i = 0; i < 12; i++) {
-      const blockOutput = {
+      const blockOutput: GPT2TransformerBlock = {
         ln_1_output: rawOutputs[`block_${i}_ln_1_output`],
-        attn_heads: [] as {
-          q: ort.Tensor;
-          k: ort.Tensor;
-          v: ort.Tensor;
-          raw: ort.Tensor;
-          scaled: ort.Tensor;
-          masked: ort.Tensor;
-          softmax: ort.Tensor;
-        }[],
+        attn_heads: [] as GPT2AttentionHead[],
         attn_output: rawOutputs[`block_${i}_attn_attn_output`],
         res_1: rawOutputs[`block_${i}_attn_res_1`],
         ln_2_output: rawOutputs[`block_${i}_mlp_ln_2_output`],
