@@ -65,6 +65,9 @@ class CausalSelfAttention(nn.Module):
         self.dict = {}
 
     def forward(self, x):
+        # store input to attention <aman>
+        self.dict["attn_input"] = x
+
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -96,7 +99,8 @@ class CausalSelfAttention(nn.Module):
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         attn = q @ k.transpose(-2, -1)
-        attn_scaled = attn * (1.0 / math.sqrt(k.size(-1)))
+        # use a fixed scale for ONNX compatibility (GPT-2 head_dim = 64, so scale = 1/8 = 0.125) <aman>
+        attn_scaled = attn * 0.125
         attn_masked = attn_scaled.masked_fill(
             self.bias[:, :, :T, :T] == 0, float('-inf'))
         attn_softmax = F.softmax(attn_masked, dim=-1)
@@ -120,6 +124,8 @@ class CausalSelfAttention(nn.Module):
             self.dict[f"head_{i}"]["attn_softmax"] = attn_softmax[:, i]
             # Attention scores after dropout
             self.dict[f"head_{i}"]["attn_dropout"] = attn_dropout[:, i]
+            # store attn @ v output <aman>
+            self.dict[f"head_{i}"]["attn_value_output"] = y[:, i]
 
             # store q, k, v for each head <aman>
             self.dict[f"head_{i}"]["q"] = q[:, i]
@@ -153,21 +159,24 @@ class MLP(nn.Module):
         self.dict = {}
 
     def forward(self, x):
+        # store input to mlp <aman>
+        self.dict["mlp_input"] = x
+
         x = self.c_fc(x)
         # store linear 1 outputs <aman>
-        self.dict["linear_1_output"] = x
+        # self.dict["linear_1_output"] = x
         x = self.gelu(x)
 
         # store gelu output <aman>
-        self.dict["gelu_output"] = x
+        self.dict["mlp_activation"] = x
         x = self.c_proj(x)
 
-        # store linear 2 output <aman>
-        self.dict["linear_2_output"] = x
+        # same as below, so comment out <aman>
+        # self.dict["mlp_output"] = x
         x = self.dropout(x)
 
         # store final mlp output <aman>
-        self.dict["output"] = x
+        self.dict["mlp_output"] = x
         return x
 
 
@@ -183,9 +192,12 @@ class Block(nn.Module):
         self.dict = {}
 
     def forward(self, x):
+        # store input to block <aman>
+        self.dict["block_input"] = x
+
         # store ln_1 output <aman>
         ln_1_output = self.ln_1(x)
-        self.dict["ln_1"] = self.ln_1.dict
+        # self.dict["ln_1"] = self.ln_1.dict
 
         self.dict["attn"] = self.attn.dict
 
@@ -195,13 +207,15 @@ class Block(nn.Module):
 
         # store ln_2 output <aman>
         ln_2_output = self.ln_2(x)
-        self.dict["ln_2"] = self.ln_2.dict
+
+        # make it mlp input instead (see mlp forward) <aman>
+        # self.dict["ln_2"] = self.ln_2.dict
 
         self.dict["mlp"] = self.mlp.dict
 
         # store second residual connection result <aman>
         x = x + self.mlp(ln_2_output)
-        self.dict["res_2"] = x
+        self.dict["block_output"] = x
 
         return x
 
@@ -321,7 +335,7 @@ class GPT(nn.Module):
         self.dictionary["ln_f"] = self.transformer.ln_f.dict
 
         self.dictionary["linear"] = {
-            # "weight": self.lm_head.weight,
+            "weight": self.lm_head.weight,
             "output": logits
         }
 

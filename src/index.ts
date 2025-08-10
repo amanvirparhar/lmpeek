@@ -1,12 +1,22 @@
 import { ModelType } from "./types";
 
-export async function loadModel(modelType: ModelType, tokenizerRepo?: string) {
-  const worker = new Worker(`./workers/${modelType}.js`, { type: "module" });
-  const pendingRequests = new Map();
+export async function loadModel(
+  modelType: ModelType,
+  options?: {
+    onnxExecutionProviders?: string[];
+    tokenizer?: string;
+  }
+) {
+  const path = `./models/${modelType}.mjs`,
+    worker = new Worker(new URL(path, import.meta.url), {
+      type: "module",
+    }),
+    pendingRequests = new Map();
 
   let messageId = 0;
 
   worker.onmessage = (e) => {
+    console.log("Worker message received:", e.data);
     const { id, type, name, data } = e.data,
       request = pendingRequests.get(id);
 
@@ -23,31 +33,59 @@ export async function loadModel(modelType: ModelType, tokenizerRepo?: string) {
   const loadId = ++messageId;
 
   worker.postMessage({
-    id: loadId,
     type: "action",
     name: "loadModel",
-    data: { tokenizerRepo },
+    data: {
+      id: loadId,
+      options: options,
+    },
   });
 
   await new Promise((resolve, reject) => {
     pendingRequests.set(loadId, { resolve, reject });
   });
 
-  return (input: string, options?: { bosToken?: boolean }) => {
-    const fwdPassId = ++messageId;
+  return {
+    forward: (input: string, options?: { bosToken?: boolean }) => {
+      const fwdPassId = ++messageId;
 
-    worker.postMessage({
-      id: fwdPassId,
-      type: "action",
-      name: "forward",
-      data: {
-        input,
-        options,
-      },
-    });
+      worker.postMessage({
+        type: "action",
+        name: "forward",
+        data: {
+          id: fwdPassId,
+          input,
+          options,
+        },
+      });
 
-    return new Promise((resolve, reject) => {
-      pendingRequests.set(fwdPassId, { resolve, reject });
-    });
+      return new Promise((resolve, reject) => {
+        pendingRequests.set(fwdPassId, { resolve, reject });
+      });
+    },
+    sample: (
+      logits: Float32Array,
+      options?: {
+        temperature?: number;
+        topP?: number;
+        topK?: number;
+      }
+    ) => {
+      const sampleId = ++messageId;
+
+      worker.postMessage({
+        type: "action",
+        name: "sample",
+        data: {
+          id: sampleId,
+          logits,
+          options,
+        },
+      });
+
+      return new Promise((resolve, reject) => {
+        pendingRequests.set(sampleId, { resolve, reject });
+      });
+    },
   };
 }

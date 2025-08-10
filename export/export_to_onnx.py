@@ -25,9 +25,14 @@ class wrapper(torch.nn.Module):
         ])
 
         for i in range(self.layer_num):
-            # add layer norm 1 output <aman>
+            # add block input <aman>
+            self.extracted_outputs.append(
+                outputs["block"][f"block_{i}"]["block_input"]
+            )
+
+            # add attention input output <aman>
             self.extracted_outputs.extend([
-                outputs["block"][f"block_{i}"]["ln_1"]["output"]
+                outputs["block"][f"block_{i}"]["attn"]["attn_input"]
             ])
 
             # add q, k, v outputs for each head <aman>
@@ -45,6 +50,8 @@ class wrapper(torch.nn.Module):
                     outputs["block"][f"block_{i}"]["attn"][f"head_{j}"]["attn_scaled"],
                     outputs["block"][f"block_{i}"]["attn"][f"head_{j}"]["attn_masked"],
                     outputs["block"][f"block_{i}"]["attn"][f"head_{j}"]["attn_softmax"],
+                    # added attention value output <aman>
+                    outputs["block"][f"block_{i}"]["attn"][f"head_{j}"]["attn_value_output"],
                     # dropout is 0 in eval, so we can skip it <aman>
                     # outputs["block"][f"block_{i}"]["attn"][f"head_{j}"]["attn_dropout"]
                 ])
@@ -53,17 +60,20 @@ class wrapper(torch.nn.Module):
             self.extracted_outputs.extend([
                 outputs["block"][f"block_{i}"]["attn"]["attn_output"],
                 outputs["block"][f"block_{i}"]["res_1"],
-                outputs["block"][f"block_{i}"]["ln_2"]["output"],
-                outputs["block"][f"block_{i}"]["mlp"]["linear_1_output"],
-                outputs["block"][f"block_{i}"]["mlp"]["gelu_output"],
-                outputs["block"][f"block_{i}"]["mlp"]["linear_2_output"],
-                outputs["block"][f"block_{i}"]["mlp"]["output"],
-                outputs["block"][f"block_{i}"]["res_2"]
+                outputs["block"][f"block_{i}"]["mlp"]["mlp_input"],
+                # outputs["block"][f"block_{i}"]["mlp"]["linear_1_output"],
+                outputs["block"][f"block_{i}"]["mlp"]["mlp_activation"],
+                outputs["block"][f"block_{i}"]["mlp"]["mlp_output"],
+                # commented out because it's the same as previous line <aman>
+                # outputs["block"][f"block_{i}"]["mlp"]["output"],
+                outputs["block"][f"block_{i}"]["block_output"]
             ])
 
         # add final layer norm and linear output <aman>
         self.extracted_outputs.extend([
             outputs["ln_f"]["output"],
+            # add unembedding matrix for logit lens <aman>
+            outputs["linear"]["weight"],
             outputs["linear"]["output"]
         ])
 
@@ -79,7 +89,9 @@ wrapped_model = wrapper(model)
 output_names = ["tok_emb", "pos_emb", "input_emb"]
 
 for i in range(model.config.n_layer):
-    output_names.append(f"block_{i}_ln_1_output")
+    output_names.extend([
+        f"block_{i}_block_input",
+        f"block_{i}_attn_attn_input"])
 
     for j in range(model.config.n_head):
         output_names.extend([
@@ -94,6 +106,7 @@ for i in range(model.config.n_layer):
             f"block_{i}_attn_head_{j}_attn_scaled",
             f"block_{i}_attn_head_{j}_attn_masked",
             f"block_{i}_attn_head_{j}_attn_softmax",
+            f"block_{i}_attn_head_{j}_attn_value_output",
             # dropout is 0 in eval, so we can skip it <aman>
             # f"block_{i}_attn_head_{j}_attn_dropout"
         ])
@@ -101,15 +114,14 @@ for i in range(model.config.n_layer):
     output_names.extend([
         f"block_{i}_attn_attn_output",
         f"block_{i}_res_1",
-        f"block_{i}_ln_2_output",
-        f"block_{i}_mlp_linear_1_output",
-        f"block_{i}_mlp_gelu_output",
-        f"block_{i}_mlp_linear_2_output",
-        f"block_{i}_mlp_output",
-        f"block_{i}_res_2"
+        f"block_{i}_mlp_mlp_input",
+        # f"block_{i}_mlp_linear_1_output",
+        f"block_{i}_mlp_mlp_activation",
+        f"block_{i}_mlp_mlp_output",
+        f"block_{i}_block_output"
     ])
 
-output_names.extend(["ln_f_output", "linear_output"])
+output_names.extend(["ln_f_output", "linear_weight", "linear_output"])
 
 # do a dummy forward pass, and assert length of output_names matches actual number of self.extracted_outputs <aman>
 # with torch.no_grad():
@@ -123,10 +135,10 @@ dummy_input = torch.tensor([[6601, 32704, 795, 30132, 2985, 284]])
 torch.onnx.export(
     wrapped_model,
     dummy_input,
-    "gpt2.onnx",
+    "gpt2-no-constant-folding.onnx",
     export_params=True,
-    opset_version=11,
-    do_constant_folding=True,
+    opset_version=17,
+    do_constant_folding=False,
     input_names=["input"],
     output_names=output_names,
     dynamic_axes={
@@ -136,7 +148,7 @@ torch.onnx.export(
             for name in output_names if name != "linear_output"
         },
         'linear_output': {0: '0', 1: '1', 2: '2'}
-    }
+    },
 )
 
 print("Model has been successfully exported to ONNX format.")
