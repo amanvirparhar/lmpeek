@@ -1,6 +1,6 @@
 # LMPeek
 
-[![lmpeek](./thumbnail.png)](https://amanvir.com/gpt-2-attention)
+[![lmpeek](https://amanvir.com/seo/gpt2-attention.png)](https://amanvir.com/gpt-2-attention)
 
 A dead-simple library that provides useful abstractions for exploring LLM internals in the browser.
 
