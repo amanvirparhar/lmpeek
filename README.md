@@ -22,27 +22,20 @@ const model = await loadModel("gpt-2", { logging: true });
 
 // Run a forward pass to get all internal states
 const outputs = await model.forward("The quick brown fox");
-console.log(outputs);
+
+// Print the attention weights for the 3rd head of the 5th layer
+console.log(outputs.layers[4].attn_heads[2].attn_weight.cpuData);
 
 // Extract logits for the last token
 const logitsTensor = outputs.final.logits,
   [batchSize, seqLength, vocabSize] = logitsTensor.dims,
-  logitsData = logitsTensor.cpuData;
+  logitsData = logitsTensor.cpuData,
+  lastTokenLogits = logitsData.slice(
+    (seqLength - 1) * vocabSize,
+    (seqLength - 1) * vocabSize + vocabSize
+  );
 
-// Get last token logits
-const lastTokenLogits = logitsData.slice(
-  (seqLength - 1) * vocabSize,
-  (seqLength - 1) * vocabSize + vocabSize
-);
-
-// Sample from logits
-const tokens = await model.sample(lastTokenLogits, {
-  temperature: 0.8,
-  topP: 0.9,
-});
-console.log(tokens);
-
-// Get next token probabilities, optionally providing sampling parameters
+// Get next token probs, optionally providing sampling parameters
 const tokens = await model.sample(logits, {
   temperature: 0.8,
   topP: 0.9,
