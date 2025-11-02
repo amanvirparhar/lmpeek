@@ -1,72 +1,34 @@
 import { fromPreTrained } from "@lenml/tokenizer-gpt2";
-import * as transformers from "@xenova/transformers";
-import * as ort from "onnxruntime-web";
+import { AutoTokenizer, PreTrainedTokenizer } from "@xenova/transformers";
+import { InferenceSession, Tensor, env } from "onnxruntime-web";
 import { get, set } from "idb-keyval";
+import type { GPT2Outputs, GPT2TransformerLayer, GPT2AttentionHead } from "../types";
+import { MODEL_CONFIGS } from "../config";
 
-export interface GPT2Embeddings {
-  tok_emb: ort.Tensor;
-  pos_emb: ort.Tensor;
-  input_emb: ort.Tensor;
-}
-
-export interface GPT2AttentionHead {
-  q: ort.Tensor;
-  k: ort.Tensor;
-  v: ort.Tensor;
-  attn_weight: ort.Tensor;
-  attn_value_output: ort.Tensor;
-}
-
-export interface GPT2MLP {
-  mlp_input: ort.Tensor;
-  mlp_activation: ort.Tensor;
-  mlp_output: ort.Tensor;
-}
-
-export interface GPT2TransformerLayer {
-  block_input: ort.Tensor;
-  attn_input: ort.Tensor;
-  attn_heads: GPT2AttentionHead[];
-  attn_output: ort.Tensor;
-  mlp: GPT2MLP;
-  block_output: ort.Tensor;
-}
-
-export interface GPT2FinalOutputs {
-  ln_f_output: ort.Tensor;
-  logits: ort.Tensor;
-}
-
-export interface GPT2Outputs {
-  embeddings: GPT2Embeddings;
-  layers: GPT2TransformerLayer[];
-  final: GPT2FinalOutputs;
-}
-
-const MODEL_CONFIG = {
-  url: "https://huggingface.co/Amanvir/gpt-2-onnx-test/resolve/main/gpt2-no-constant-folding.onnx",
-};
-
-// ort.env.logLevel = "warning";
+const MODEL_CONFIG = MODEL_CONFIGS["gpt-2"];
 
 let tokenizer:
-    | ReturnType<typeof fromPreTrained>
-    | transformers.PreTrainedTokenizer,
-  modelSession: ort.InferenceSession,
-  isLoaded = false;
+  | ReturnType<typeof fromPreTrained>
+  | PreTrainedTokenizer,
+  modelSession: InferenceSession,
+  isLoaded = false,
+  loggingEnabled = false;
+
+const log = (...args: any[]) => {
+  if (loggingEnabled) console.log(...args);
+};
+
+const actions: Record<string, (data: any) => Promise<void>> = {
+  loadModel: (data) => loadModel(data.id, data?.options),
+  forward: (data) => forward(data.id, data.input, data?.options),
+  sample: (data) => getTokens(data.id, getTokenProbs(data.logits, data?.options)),
+  encode: (data) => encode(data.id, data.text),
+  decode: (data) => decode(data.id, data.tokenIds),
+};
 
 self.onmessage = async (e) => {
   const { type, name, data } = e.data;
-
-  if (type == "action") {
-    if (name === "loadModel") {
-      await loadModel(data.id, data?.options);
-    } else if (name === "forward") {
-      await forward(data.id, data.input, data?.options);
-    } else if (name === "sample") {
-      await getTokens(data.id, getTokenProbs(data.logits, data?.options));
-    }
-  }
+  if (type === "action" && name in actions) await actions[name](data);
 };
 
 async function loadModel(
@@ -74,52 +36,55 @@ async function loadModel(
   modelOptions?: {
     onnxExecutionProviders?: string[];
     tokenizer?: string;
+    logging?: boolean;
   }
 ) {
   const startTime = performance.now();
+
+  loggingEnabled = modelOptions?.logging ?? false;
 
   if (isLoaded) {
     postMessage({
       id,
       type: "error",
       name: "modelAlreadyLoaded",
+      data: "Model is already loaded",
     });
     return;
   }
 
   if (!modelOptions?.tokenizer) {
-    console.log("using default tokenizer");
+    log("[lmpeek] Using default GPT-2 tokenizer");
     tokenizer = fromPreTrained();
   } else {
     try {
-      tokenizer = await transformers.AutoTokenizer.from_pretrained(
+      tokenizer = await AutoTokenizer.from_pretrained(
         modelOptions.tokenizer
       );
-      console.log("loaded custom tokenizer:", modelOptions.tokenizer);
+      log(`[lmpeek] Loaded custom tokenizer: ${modelOptions.tokenizer}`);
     } catch (error) {
-      console.log("error!");
       postMessage({
         id,
         type: "error",
         name: "tokenizerLoadError",
         data: `Failed to load tokenizer: ${error}`,
       });
+      return;
     }
   }
 
   const getModelUrl = async () => {
     try {
-      // check if model is in indexeddb
       const file = await get(MODEL_CONFIG.url);
+
       if (!file) throw new Error("Model file not found in IDB.");
-      console.log("model found in indexeddb:", MODEL_CONFIG.url);
+      log("[lmpeek] Model found in cache");
+
       return URL.createObjectURL(file);
     } catch (error) {
-      console.log("downloading model from URL:", MODEL_CONFIG.url);
+      log("[lmpeek] Downloading model...");
 
-      // download model if not in indexeddb
       const response = await fetch(MODEL_CONFIG.url);
-
       if (!response.ok) {
         postMessage({
           id,
@@ -146,13 +111,13 @@ async function loadModel(
   };
 
   try {
-    modelSession = await ort.InferenceSession.create(await getModelUrl(), {
+    modelSession = await InferenceSession.create(await getModelUrl(), {
       executionProviders: modelOptions?.onnxExecutionProviders || ["wasm"],
     });
     isLoaded = true;
 
     const loadTime = performance.now() - startTime;
-    console.log(`[TIMING] Model loaded in ${loadTime.toFixed(2)}ms`);
+    log(`[lmpeek] Model loaded in ${loadTime.toFixed(0)}ms`);
 
     postMessage({
       id,
@@ -187,12 +152,11 @@ async function forward(
   }
 
   try {
-    // handle both single string or array of strings (batch)
     const inputs = Array.isArray(input) ? input : [input],
       batchTokenIds = inputs.map((text) => {
-        return options?.bosToken
-          ? [50256, ...tokenizer.encode(text)]
-          : tokenizer.encode(text);
+        const encoded = tokenizer.encode(text);
+        const tokenIds = Array.isArray(encoded) ? encoded : Array.from(encoded);
+        return options?.bosToken ? [50256, ...tokenIds] : tokenIds;
       }),
       maxTokLength = Math.max(...batchTokenIds.map((ids) => ids.length)),
       paddedBatch = batchTokenIds.map((ids) => {
@@ -200,14 +164,14 @@ async function forward(
           return [...ids, ...Array(maxTokLength - ids.length).fill(0)];
         return ids;
       }),
-      inputTensor = new ort.Tensor("int64", paddedBatch.flat(), [
+      inputTensor = new Tensor("int64", paddedBatch.flat(), [
         inputs.length,
         maxTokLength,
       ]);
 
     const rawOutputs = await modelSession.run({
-        input: inputTensor,
-      }),
+      input: inputTensor,
+    }),
       formattedOutputs: GPT2Outputs = {
         embeddings: {
           tok_emb: rawOutputs["tok_emb"],
@@ -250,7 +214,7 @@ async function forward(
     }
 
     const loadTime = performance.now() - startTime;
-    console.log(`[TIMING] Model loaded in ${loadTime.toFixed(2)}ms`);
+    log(`[lmpeek] Forward pass completed in ${loadTime.toFixed(0)}ms`);
 
     postMessage({
       id,
@@ -270,7 +234,7 @@ async function forward(
 }
 
 function getTokenProbs(
-  logits: Float32Array,
+  inputLogits: Float32Array,
   options?: {
     temperature?: number;
     topP?: number;
@@ -279,12 +243,12 @@ function getTokenProbs(
 ): Float32Array {
   const { temperature = 1.0, topP, topK } = options || {};
 
-  // apply temperature scaling
+  let logits = new Float32Array(inputLogits);
+
   if (temperature !== 1.0 && temperature > 0) {
     logits = logits.map((logit) => logit / temperature);
   }
 
-  // apply top-k
   if (topK && topK > 0 && topK < logits.length) {
     const indexed = Array.from(logits).map((logit, index) => ({
       logit,
@@ -293,7 +257,6 @@ function getTokenProbs(
 
     indexed.sort((a, b) => b.logit - a.logit);
 
-    // keep only top-k indices in logits; set others to negative infinity
     const topKIndices = new Set(
       indexed.slice(0, topK).map((item) => item.index)
     );
@@ -305,15 +268,14 @@ function getTokenProbs(
 
   let probabilities = (() => {
     const maxLogit = Math.max(
-        ...Array.from(logits).filter((x) => x !== -Infinity)
-      ),
+      ...Array.from(logits).filter((x) => x !== -Infinity)
+    ),
       expLogits = logits.map((logit) => Math.exp(logit - maxLogit)),
       sumExp = expLogits.reduce((a, b) => a + b, 0);
 
     return new Float32Array(expLogits.map((logit) => logit / sumExp));
   })();
 
-  // apply top-p
   if (topP && topP > 0 && topP < 1.0) {
     const indexed = Array.from(probabilities).map((prob, index) => ({
       prob,
@@ -324,7 +286,6 @@ function getTokenProbs(
 
     let cumulative = 0;
 
-    // use cumulative to track current sum, and find top-p indices
     const topPIndices = new Set<number>();
     for (const item of indexed) {
       cumulative += item.prob;
@@ -336,7 +297,6 @@ function getTokenProbs(
       topPIndices.has(index) ? prob : 0
     );
 
-    // renormalize after zeroing out indices that were filtered out (conditional is to ensure no div by 0)
     const sum = probabilities.reduce((a, b) => a + b, 0);
     if (sum > 0) {
       probabilities = probabilities.map((prob) => prob / sum);
@@ -350,7 +310,8 @@ async function getTokens(id: number, probabilities: Float32Array) {
   const tokenProbs: Record<string, number> = {};
 
   for (let i = 0; i < probabilities.length; i++) {
-    const token = tokenizer.decode([i]);
+    const decoded = tokenizer.decode([i]),
+      token = typeof decoded === "string" ? decoded : String(decoded);
     tokenProbs[token] = probabilities[i];
   }
 
@@ -362,4 +323,66 @@ async function getTokens(id: number, probabilities: Float32Array) {
       ([, probA], [, probB]) => probB - probA
     ),
   });
+}
+
+async function encode(id: number, text: string) {
+  if (!tokenizer) {
+    postMessage({
+      id,
+      type: "error",
+      name: "tokenizerNotLoaded",
+      data: "Tokenizer is not loaded. Please load the model first.",
+    });
+    return;
+  }
+
+  try {
+    const encoded = tokenizer.encode(text),
+      tokenIds = Array.isArray(encoded) ? encoded : Array.from(encoded);
+
+    postMessage({
+      id,
+      type: "success",
+      name: "encode",
+      data: tokenIds,
+    });
+  } catch (error) {
+    postMessage({
+      id,
+      type: "error",
+      name: "encodeError",
+      data: `Failed to encode text: ${error}`,
+    });
+  }
+}
+
+async function decode(id: number, tokenIds: number[]) {
+  if (!tokenizer) {
+    postMessage({
+      id,
+      type: "error",
+      name: "tokenizerNotLoaded",
+      data: "Tokenizer is not loaded. Please load the model first.",
+    });
+    return;
+  }
+
+  try {
+    const decoded = tokenizer.decode(tokenIds),
+      text = typeof decoded === "string" ? decoded : String(decoded);
+
+    postMessage({
+      id,
+      type: "success",
+      name: "decode",
+      data: text,
+    });
+  } catch (error) {
+    postMessage({
+      id,
+      type: "error",
+      name: "decodeError",
+      data: `Failed to decode tokens: ${error}`,
+    });
+  }
 }

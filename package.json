@@ -1,50 +1,43 @@
 {
   "name": "lmpeek",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A library for analyzing LLM internals in web browsers.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "dist/*.wasm"
+    "dist"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    },
-    "./worker": {
-      "types": "./dist/gpt-2.d.ts",
-      "import": "./dist/gpt-2.mjs",
-      "require": "./dist/gpt-2.js"
     }
   },
-  "homepage": "https://amanvir.com/gpt-2-attention",
+  "homepage": "https://github.com/amanvir/lmpeek",
   "repository": {
-    "url": "https://github.com/amanvir/lmpeek"
+    "type": "git",
+    "url": "git+https://github.com/amanvir/lmpeek.git"
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "llm",
     "gpt-2",
-    "attention",
     "onnx",
-    "web-worker",
-    "browser",
-    "machine-learning"
+    "mechanistic-interpretability"
   ],
   "author": "amanvir_",
   "license": "MIT",
   "dependencies": {
-    "@lenml/tokenizer-gpt2": "^1.1.2",
-    "@xenova/transformers": "^2.17.2",
-    "idb-keyval": "^6.2.2",
-    "onnxruntime-web": "^1.22.0"
+    "@lenml/tokenizer-gpt2": "1.1.2",
+    "@xenova/transformers": "2.17.2",
+    "idb-keyval": "6.2.2",
+    "onnxruntime-web": "1.22.0"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
