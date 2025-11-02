@@ -9,3 +9,5 @@ tsconfig.json
 tsup.config.ts
 
 notes.txt
+
+*.tgz
