@@ -45,7 +45,7 @@ console.log(outputs);
 // Get final logits
 const logits = outputs.final.logits.data as Float32Array;
 
-// Sample next token, optionally providing sampling parameters
+// Get next token probabilities, optionally providing sampling parameters
 const tokens = await model.sample(logits, {
   temperature: 0.8,
   topP: 0.9,
