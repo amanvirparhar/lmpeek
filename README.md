@@ -36,7 +36,7 @@ const logitsTensor = outputs.final.logits,
   );
 
 // Get next token probs, optionally providing sampling parameters
-const tokens = await model.sample(logits, {
+const tokens = await model.sample(lastTokenLogits, {
   temperature: 0.8,
   topP: 0.9,
   topK: 50,
