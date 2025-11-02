@@ -1,6 +1,6 @@
 {
   "name": "lmpeek",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A library for analyzing LLM internals in web browsers.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
