@@ -24,8 +24,23 @@ const model = await loadModel("gpt-2", { logging: true });
 const outputs = await model.forward("The quick brown fox");
 console.log(outputs);
 
-// Get final logits
-const logits = outputs.final.logits.data as Float32Array;
+// Extract logits for the last token
+const logitsTensor = outputs.final.logits,
+  [batchSize, seqLength, vocabSize] = logitsTensor.dims,
+  logitsData = logitsTensor.cpuData;
+
+// Get last token logits
+const lastTokenLogits = logitsData.slice(
+  (seqLength - 1) * vocabSize,
+  (seqLength - 1) * vocabSize + vocabSize
+);
+
+// Sample from logits
+const tokens = await model.sample(lastTokenLogits, {
+  temperature: 0.8,
+  topP: 0.9,
+});
+console.log(tokens);
 
 // Get next token probabilities, optionally providing sampling parameters
 const tokens = await model.sample(logits, {
