@@ -30,7 +30,7 @@ On the other hand, LMPeek...
 - Performs tokenization + inference on web worker
 - Exposes embeddings, attention weights, MLP activations, logits, and more
 
-## Example Usage
+## Usage
 
 ```typescript
 import { loadModel } from "lmpeek";
@@ -55,6 +55,8 @@ console.log(tokens);
 
 // Clean up
 model.dispose();
+
+// See src/model.ts for full list of supported methods!
 ```
 
 ## License
