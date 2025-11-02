@@ -56,7 +56,7 @@ console.log(tokens);
 // Clean up
 model.dispose();
 
-// See src/model.ts for full list of supported methods!
+// See src/model.ts for a full list of supported methods!
 ```
 
 ## License
