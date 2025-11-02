@@ -15,10 +15,10 @@
       "require": "./dist/index.js"
     }
   },
-  "homepage": "https://github.com/amanvir/lmpeek",
+  "homepage": "https://github.com/amanvirparhar/lmpeek",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amanvir/lmpeek.git"
+    "url": "git+https://github.com/amanvirparhar/lmpeek.git"
   },
   "scripts": {
     "build": "tsup",
