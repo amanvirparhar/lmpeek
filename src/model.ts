@@ -2,6 +2,7 @@ import type {
   ModelType,
   LoadModelOptions,
   ForwardOptions,
+  EncodeOptions,
   SamplingOptions,
   ModelInstance,
   GPT2Outputs,
@@ -124,10 +125,11 @@ export async function loadModel(
     /**
      * Encode text to token IDs using the worker's tokenizer
      * @param text - Text to encode
+     * @param options - Encoding options
      * @returns Promise resolving to array of token IDs
      */
-    encode: (text: string): Promise<number[]> =>
-      createRequest<number[]>("encode", { text }),
+    encode: (text: string, options?: EncodeOptions): Promise<number[]> =>
+      createRequest<number[]>("encode", { text, options }),
     /**
      * Decode token IDs to text using the worker's tokenizer
      * @param tokenIds - Array of token IDs to decode

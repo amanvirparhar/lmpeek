@@ -14,6 +14,10 @@ export interface ForwardOptions {
   bosToken?: boolean;
 }
 
+export interface EncodeOptions {
+  bosToken?: boolean;
+}
+
 export interface SamplingOptions {
   temperature?: number;
   topP?: number;
@@ -25,7 +29,7 @@ export type SampleResult = [string, number][];
 export interface ModelInstance {
   forward: (input: string, options?: ForwardOptions) => Promise<GPT2Outputs>;
   sample: (logits: Float32Array, options?: SamplingOptions) => Promise<SampleResult>;
-  encode: (text: string) => Promise<number[]>;
+  encode: (text: string, options?: EncodeOptions) => Promise<number[]>;
   decode: (tokenIds: number[]) => Promise<string>;
   dispose: () => void;
 }

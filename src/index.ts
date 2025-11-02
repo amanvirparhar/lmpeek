@@ -4,6 +4,7 @@ export type {
   SampleResult,
   LoadModelOptions,
   ForwardOptions,
+  EncodeOptions,
   SamplingOptions,
   ModelInstance,
   GPT2Outputs,

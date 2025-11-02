@@ -22,7 +22,7 @@ const actions: Record<string, (data: any) => Promise<void>> = {
   loadModel: (data) => loadModel(data.id, data?.options),
   forward: (data) => forward(data.id, data.input, data?.options),
   sample: (data) => getTokens(data.id, getTokenProbs(data.logits, data?.options)),
-  encode: (data) => encode(data.id, data.text),
+  encode: (data) => encode(data.id, data.text, data?.options),
   decode: (data) => decode(data.id, data.tokenIds),
 };
 
@@ -325,7 +325,7 @@ async function getTokens(id: number, probabilities: Float32Array) {
   });
 }
 
-async function encode(id: number, text: string) {
+async function encode(id: number, text: string, options?: { bosToken?: boolean }) {
   if (!tokenizer) {
     postMessage({
       id,
@@ -338,13 +338,14 @@ async function encode(id: number, text: string) {
 
   try {
     const encoded = tokenizer.encode(text),
-      tokenIds = Array.isArray(encoded) ? encoded : Array.from(encoded);
+      tokenIds = Array.isArray(encoded) ? encoded : Array.from(encoded),
+      result = options?.bosToken ? [50256, ...tokenIds] : tokenIds;
 
     postMessage({
       id,
       type: "success",
       name: "encode",
-      data: tokenIds,
+      data: result,
     });
   } catch (error) {
     postMessage({
